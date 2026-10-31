@@ -1,0 +1,22 @@
+# Local configuration and backup data
+/settings.json
+/backups/
+/debug_params.txt
+/test_xcopy.ps1
+
+# Legacy plugin sources are not part of the native Windows application
+/backend/
+/public/
+
+# Downloaded third-party binaries and generated distribution packages
+/ludusavi/
+/WindowsApp/
+
+# .NET build outputs and IDE files
+**/bin/
+**/obj/
+.vs/
+.vscode/
+*.user
+*.suo
+
