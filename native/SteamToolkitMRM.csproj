@@ -12,5 +12,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Resource Include="Assets\SteamToolkitMRM.ico"/>
+    <Resource Include="Assets\SteamToolkitMRM_largest.png">
+      <LogicalName>Assets\SteamToolkitMRM_largest.png</LogicalName>
+    </Resource>
   </ItemGroup>
 </Project>

@@ -11,16 +11,17 @@ internal sealed class RenameDialog : Window
 
     public RenameDialog(string currentName)
     {
+        WindowTheme.Apply(this);
         Title = Localization.Get("Renomear backup");
-        Width = 430;
-        Height = 190;
+        Width = 440;
+        Height = 214;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush(Color.FromRgb(18, 26, 43));
-        Foreground = new SolidColorBrush(Color.FromRgb(243, 246, 252));
-        FontFamily = new FontFamily("Segoe UI");
+        Background = (Brush)Application.Current.Resources["WindowBrush"];
+        Foreground = (Brush)Application.Current.Resources["TextBrush"];
+        FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI");
 
-        var content = new StackPanel { Margin = new Thickness(22) };
+        var content = new StackPanel { Margin = new Thickness(22, 20, 22, 18) };
         content.Children.Add(new TextBlock
         {
             Text = Localization.Get("Nome do backup"),
@@ -29,22 +30,31 @@ internal sealed class RenameDialog : Window
             Margin = new Thickness(0, 0, 0, 12)
         });
 
-        _nameInput = new TextBox { Text = currentName, VerticalContentAlignment = VerticalAlignment.Center };
+        _nameInput = new TextBox
+        {
+            Text = currentName,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            MinHeight = 38
+        };
         content.Children.Add(_nameInput);
 
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 18, 0, 0)
+            Margin = new Thickness(0, 20, 0, 0)
         };
-        var cancel = new Button { Content = Localization.Get("Cancelar"), Margin = new Thickness(0, 0, 8, 0) };
+        var cancel = new Button
+        {
+            Content = Localization.Get("Cancelar"),
+            Margin = new Thickness(0, 0, 8, 0),
+            Style = (Style)Application.Current.Resources["SecondaryButtonStyle"]
+        };
         cancel.Click += (_, _) => DialogResult = false;
         var save = new Button
         {
             Content = Localization.Get("Guardar"),
-            Background = (Brush)Application.Current.Resources["AccentBrush"],
-            Foreground = new SolidColorBrush(Color.FromRgb(8, 16, 30))
+            Style = (Style)Application.Current.Resources["PrimaryButtonStyle"]
         };
         save.Click += (_, _) => Confirm();
         buttons.Children.Add(cancel);

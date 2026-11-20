@@ -24,6 +24,6 @@ O script cria o instalador principal em `WindowsApp\Instalador\SteamToolkitMRM-S
 
 ## Testes dos backups
 
-Os testes criam uma instalação Steam de exemplo isolada com as mesmas quatro pastas usadas pelo plugin anterior (`userdata`, `appcache\stats`, `depotcache` e `config\st-plug-in`), validam a estrutura e os metadados gerados e confirmam a cópia e o restauro. Não alteram a instalação Steam real.
+Os testes criam uma instalação Steam de exemplo isolada com as mesmas três pastas usadas pela versão anterior (`userdata`, `appcache\stats` e `depotcache`), validam a estrutura e os metadados gerados e confirmam a cópia e o restauro. Não alteram a instalação Steam real.
 
 O código do aplicativo é licenciado sob MIT. Créditos e licenças de Ludusavi e das respetivas dependências estão em [`../THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md).

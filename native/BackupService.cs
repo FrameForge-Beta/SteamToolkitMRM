@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.IO.Compression;
 using System.Security;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -20,8 +21,7 @@ internal sealed class BackupService
     [
         (Path.Combine("userdata"), "userdata"),
         (Path.Combine("appcache", "stats"), "appcache_stats"),
-        (Path.Combine("depotcache"), "depotcache"),
-        (Path.Combine("config", "stplug-in"), "stplug-in")
+        (Path.Combine("depotcache"), "depotcache")
     ];
 
     private readonly string _settingsFile;
@@ -62,6 +62,7 @@ internal sealed class BackupService
         Directory.CreateDirectory(root);
         var backups = new List<BackupEntry>();
 
+        // Regular directory backups
         foreach (string path in Directory.EnumerateDirectories(root, "BackupSteamMRM*"))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -76,11 +77,54 @@ internal sealed class BackupService
                 DateLabel = date,
                 SizeLabel = FormatSize(bytes),
                 SizeSortKey = bytes.ToString("D20", CultureInfo.InvariantCulture),
-                Pinned = metadata.Pinned
+                Pinned = metadata.Pinned,
+                Compressed = metadata.Compressed,
+                CompressionFormat = metadata.CompressionFormat,
+                CompressionSource = metadata.CompressionSource
+            });
+        }
+
+        // Compressed archive backups (.zip, .7z)
+        foreach (string archivePath in EnumerateArchiveBackups(root))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string archiveName = Path.GetFileNameWithoutExtension(archivePath);
+            string metaPath = Path.ChangeExtension(archivePath, ".meta.json");
+            BackupMetadata metadata = File.Exists(metaPath)
+                ? JsonSerializer.Deserialize<BackupMetadata>(File.ReadAllText(metaPath), JsonOptions) ?? new BackupMetadata()
+                : new BackupMetadata();
+            string date = ParseBackupDate(metadata.Timestamp, archiveName);
+            long bytes = new FileInfo(archivePath).Length;
+            backups.Add(new BackupEntry
+            {
+                Folder = archiveName,
+                Name = string.IsNullOrWhiteSpace(metadata.CustomName) ? archiveName : metadata.CustomName,
+                DateLabel = date,
+                SizeLabel = FormatSize(bytes),
+                SizeSortKey = bytes.ToString("D20", CultureInfo.InvariantCulture),
+                Pinned = metadata.Pinned,
+                Compressed = true,
+                CompressionFormat = string.IsNullOrWhiteSpace(metadata.CompressionFormat)
+                    ? Path.GetExtension(archivePath).TrimStart('.').ToLowerInvariant()
+                    : metadata.CompressionFormat,
+                CompressionSource = metadata.CompressionSource
             });
         }
 
         return backups.OrderByDescending(item => item.Folder, StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    private static IEnumerable<string> EnumerateArchiveBackups(string root)
+    {
+        if (!Directory.Exists(root))
+            yield break;
+
+        foreach (string path in Directory.EnumerateFiles(root, "BackupSteamMRM*", SearchOption.TopDirectoryOnly))
+        {
+            if (path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ||
+                path.EndsWith(".7z", StringComparison.OrdinalIgnoreCase))
+                yield return path;
+        }
     }
 
     public async Task CreateBackupAsync(string trigger, CancellationToken cancellationToken = default)
@@ -129,12 +173,26 @@ internal sealed class BackupService
                     Pinned = false
                 };
                 await WriteMetadataAsync(backupPath, metadata, cancellationToken);
+
+                // Auto-compress if enabled
+                if (_settings.CompressionEnabled && !string.IsNullOrWhiteSpace(_settings.CompressionFormat))
+                {
+                    await CompressBackupAsync(backupPath, _settings.CompressionFormat, "auto", cancellationToken);
+                }
+
                 await CleanupBackupsAsync(cancellationToken);
             }
             catch
             {
                 if (Directory.Exists(backupPath))
                     DeleteDirectoryTree(backupPath);
+                // Also clean up any partial archive
+                string archivePath = Path.ChangeExtension(backupPath, $".{_settings.CompressionFormat.ToLowerInvariant()}");
+                if (File.Exists(archivePath))
+                    File.Delete(archivePath);
+                string metaPath = Path.ChangeExtension(archivePath, ".meta.json");
+                if (File.Exists(metaPath))
+                    File.Delete(metaPath);
                 throw;
             }
         }
@@ -149,10 +207,71 @@ internal sealed class BackupService
         await _operationLock.WaitAsync(cancellationToken);
         bool restoreStarted = false;
         string steamPath = "";
+        string tempExtractPath = "";
         try
         {
             steamPath = SteamPath;
-            string backupPath = GetBackupDirectory(folder);
+            string root = BackupRoot;
+            string dirPath = Path.Combine(root, folder);
+            string archivePath = "";
+            bool isCompressed = false;
+
+            if (Directory.Exists(dirPath))
+            {
+                // Regular directory backup
+            }
+            else
+            {
+                // Check for archive
+                foreach (string ext in new[] { ".zip", ".7z" })
+                {
+                    string testPath = Path.Combine(root, folder + ext);
+                    if (File.Exists(testPath))
+                    {
+                        archivePath = testPath;
+                        isCompressed = true;
+                        break;
+                    }
+                }
+                if (string.IsNullOrEmpty(archivePath))
+                    throw new DirectoryNotFoundException(Localization.Get("O backup selecionado já não existe."));
+
+                // Extract to temp directory
+                tempExtractPath = Path.Combine(Path.GetTempPath(), $"stm_restore_{Guid.NewGuid():N}");
+                Directory.CreateDirectory(tempExtractPath);
+
+                if (archivePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                {
+                    await Task.Run(() => ZipFile.ExtractToDirectory(archivePath, tempExtractPath, true), cancellationToken);
+                }
+                else if (archivePath.EndsWith(".7z", StringComparison.OrdinalIgnoreCase))
+                {
+                    string sevenZipPath = await FindSevenZipAsync();
+                    if (string.IsNullOrEmpty(sevenZipPath))
+                        throw new InvalidOperationException(Localization.Get("7-Zip não encontrado. Instale o 7-Zip para restaurar backups .7z."));
+
+                    ProcessStartInfo psi = new()
+                    {
+                        FileName = sevenZipPath,
+                        Arguments = $"x -y -o\"{tempExtractPath}\" \"{archivePath}\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true
+                    };
+                    using Process? proc = Process.Start(psi);
+                    if (proc is null)
+                        throw new InvalidOperationException(Localization.Get("Não foi possível iniciar o 7-Zip."));
+                    await proc.WaitForExitAsync(cancellationToken);
+                    if (proc.ExitCode != 0)
+                    {
+                        string error = await proc.StandardError.ReadToEndAsync();
+                        throw new InvalidOperationException(Localization.Format("Erro ao extrair com 7-Zip: {0}", error));
+                    }
+                }
+            }
+
+            string backupPath = isCompressed ? tempExtractPath : dirPath;
             if (!Directory.Exists(backupPath))
                 throw new DirectoryNotFoundException(Localization.Get("O backup selecionado já não existe."));
 
@@ -174,7 +293,6 @@ internal sealed class BackupService
                 string destination = backupName switch
                 {
                     "appcache_stats" => Path.Combine(steamPath, "appcache", "stats"),
-                    "stplug-in" => Path.Combine(steamPath, "config", "stplug-in"),
                     _ => Path.Combine(steamPath, backupName)
                 };
                 await CopyDirectoryAsync(source, destination, cancellationToken);
@@ -184,47 +302,127 @@ internal sealed class BackupService
         {
             if (restoreStarted)
                 _startSteam(steamPath);
+            if (!string.IsNullOrEmpty(tempExtractPath) && Directory.Exists(tempExtractPath))
+            {
+                try { DeleteDirectoryTree(tempExtractPath); } catch { }
+            }
             _operationLock.Release();
         }
     }
 
     public async Task DeleteBackupAsync(string folder, CancellationToken cancellationToken = default)
     {
-        string path = GetBackupDirectory(folder);
-        if (!Directory.Exists(path))
-            throw new DirectoryNotFoundException(Localization.Get("O backup selecionado já não existe."));
+        string root = BackupRoot;
+        string dirPath = Path.Combine(root, folder);
+        string archivePath = "";
+        string metaPath = "";
 
-        if (ReadMetadata(path).Pinned)
+        bool isDirectory = Directory.Exists(dirPath);
+        if (isDirectory)
+        {
+            metaPath = Path.Combine(dirPath, "meta.json");
+        }
+        else
+        {
+            // Check for archive
+            foreach (string ext in new[] { ".zip", ".7z" })
+            {
+                string testPath = Path.Combine(root, folder + ext);
+                if (File.Exists(testPath))
+                {
+                    archivePath = testPath;
+                    metaPath = Path.ChangeExtension(testPath, ".meta.json");
+                    break;
+                }
+            }
+            if (string.IsNullOrEmpty(archivePath))
+                throw new DirectoryNotFoundException(Localization.Get("O backup selecionado já não existe."));
+        }
+
+        BackupMetadata metadata = File.Exists(metaPath)
+            ? JsonSerializer.Deserialize<BackupMetadata>(File.ReadAllText(metaPath), JsonOptions) ?? new BackupMetadata()
+            : new BackupMetadata();
+
+        if (metadata.Pinned)
             throw new InvalidOperationException(Localization.Get("Este backup está fixado e não pode ser apagado."));
 
+        // Protect manually compressed backups from deletion
+        if (string.Equals(metadata.CompressionSource, "manual", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(Localization.Get("Backups comprimidos manualmente não podem ser apagados."));
+
         cancellationToken.ThrowIfCancellationRequested();
-        DeleteDirectoryTree(path);
+
+        if (isDirectory)
+        {
+            DeleteDirectoryTree(dirPath);
+        }
+        else
+        {
+            if (File.Exists(archivePath))
+                File.Delete(archivePath);
+            if (File.Exists(metaPath))
+                File.Delete(metaPath);
+        }
         await Task.CompletedTask;
     }
 
     public async Task UpdateBackupAsync(string folder, string? customName, bool? pinned,
         CancellationToken cancellationToken = default)
     {
-        string path = GetBackupDirectory(folder);
-        if (!Directory.Exists(path))
+        string root = BackupRoot;
+        string dirPath = Path.Combine(root, folder);
+        string archivePath = "";
+        string metaPath = "";
+
+        bool isDirectory = Directory.Exists(dirPath);
+        if (isDirectory)
+        {
+            metaPath = Path.Combine(dirPath, "meta.json");
+        }
+        else
+        {
+            foreach (string ext in new[] { ".zip", ".7z" })
+            {
+                string testPath = Path.Combine(root, folder + ext);
+                if (File.Exists(testPath))
+                {
+                    archivePath = testPath;
+                    metaPath = Path.ChangeExtension(testPath, ".meta.json");
+                    break;
+                }
+            }
+            if (string.IsNullOrEmpty(archivePath))
+                throw new DirectoryNotFoundException(Localization.Get("O backup selecionado já não existe."));
+        }
+
+        if (!File.Exists(metaPath))
             throw new DirectoryNotFoundException(Localization.Get("O backup selecionado já não existe."));
 
-        BackupMetadata metadata = ReadMetadata(path);
+        BackupMetadata metadata = JsonSerializer.Deserialize<BackupMetadata>(File.ReadAllText(metaPath), JsonOptions)
+            ?? new BackupMetadata();
+
         if (customName is not null)
             metadata.CustomName = string.IsNullOrWhiteSpace(customName) ? null : customName.Trim();
         if (pinned.HasValue)
             metadata.Pinned = pinned.Value;
-        await WriteMetadataAsync(path, metadata, cancellationToken);
+
+        string temporary = metaPath + ".tmp";
+        await File.WriteAllTextAsync(temporary, JsonSerializer.Serialize(metadata, JsonOptions), cancellationToken);
+        File.Move(temporary, metaPath, overwrite: true);
     }
 
     public async Task SaveSettingsAsync(int backupLimit, string? backupPath, bool autoBackupEnabled,
         bool autoBackupOnGameStart, string primaryColor, bool moveExistingBackups,
         bool startWithWindows, bool startMinimizedToTray,
-        CancellationToken cancellationToken = default, string language = "pt")
+        CancellationToken cancellationToken = default, string language = "pt",
+        bool compressionEnabled = false, string compressionFormat = "zip")
     {
         if (backupLimit < 1)
             throw new ArgumentOutOfRangeException(nameof(backupLimit),
                 Localization.Get("O limite precisa ser pelo menos 1."));
+
+        if (compressionEnabled && !new[] { "zip", "7z" }.Contains(compressionFormat.ToLowerInvariant()))
+            throw new ArgumentException(Localization.Get("Formato de compressão inválido. Use 'zip' ou '7z'."));
 
         string? normalizedPath = string.IsNullOrWhiteSpace(backupPath)
             ? null
@@ -260,6 +458,8 @@ internal sealed class BackupService
         bool previousStartWithWindows = _settings.StartWithWindows;
         bool previousStartMinimizedToTray = _settings.StartMinimizedToTray;
         string previousLanguage = _settings.Language;
+        bool previousCompressionEnabled = _settings.CompressionEnabled;
+        string previousCompressionFormat = _settings.CompressionFormat;
         List<string> previousHistory = [.. _settings.BackupHistory];
         try
         {
@@ -281,6 +481,8 @@ internal sealed class BackupService
             _settings.StartWithWindows = startWithWindows;
             _settings.StartMinimizedToTray = startMinimizedToTray;
             _settings.Language = Localization.NormalizeLanguage(language);
+            _settings.CompressionEnabled = compressionEnabled;
+            _settings.CompressionFormat = compressionFormat.ToLowerInvariant();
             await SaveSettingsFileAsync(cancellationToken);
         }
         catch
@@ -293,6 +495,8 @@ internal sealed class BackupService
             _settings.StartWithWindows = previousStartWithWindows;
             _settings.StartMinimizedToTray = previousStartMinimizedToTray;
             _settings.Language = previousLanguage;
+            _settings.CompressionEnabled = previousCompressionEnabled;
+            _settings.CompressionFormat = previousCompressionFormat;
             _settings.BackupHistory = previousHistory;
             if (copiedBackups is not null)
             {
@@ -438,19 +642,66 @@ internal sealed class BackupService
         if (!Directory.Exists(root))
             return;
 
-        var unpinned = new List<(string Path, string Name)>();
+        var candidates = new List<(string Path, string Name, DateTime Date, bool Protected)>();
+
+        // Directory backups
         foreach (string path in Directory.EnumerateDirectories(root, "BackupSteamMRM*"))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (!ReadMetadata(path).Pinned)
-                unpinned.Add((path, Path.GetFileName(path)));
+            BackupMetadata metadata = ReadMetadata(path);
+            bool protectedFromDeletion = metadata.Pinned || 
+                string.Equals(metadata.CompressionSource, "manual", StringComparison.OrdinalIgnoreCase);
+            if (!protectedFromDeletion)
+            {
+                string name = Path.GetFileName(path);
+                DateTime date = DateTime.TryParseExact(
+                    metadata.Timestamp ?? name["BackupSteamMRM-".Length..].Split('-')[0],
+                    "yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out DateTime parsed)
+                    ? parsed : DateTime.MinValue;
+                candidates.Add((path, name, date, false));
+            }
         }
 
-        foreach ((string path, _) in unpinned.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
-                     .Take(Math.Max(0, unpinned.Count - _settings.BackupLimit)))
+        // Compressed archive backups
+        foreach (string archivePath in EnumerateArchiveBackups(root))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            DeleteDirectoryTree(path);
+            string archiveName = Path.GetFileNameWithoutExtension(archivePath);
+            string metaPath = Path.ChangeExtension(archivePath, ".meta.json");
+            BackupMetadata metadata = File.Exists(metaPath)
+                ? JsonSerializer.Deserialize<BackupMetadata>(File.ReadAllText(metaPath), JsonOptions) ?? new BackupMetadata()
+                : new BackupMetadata();
+            bool protectedFromDeletion = metadata.Pinned || 
+                string.Equals(metadata.CompressionSource, "manual", StringComparison.OrdinalIgnoreCase);
+            if (!protectedFromDeletion)
+            {
+                DateTime date = DateTime.TryParseExact(
+                    metadata.Timestamp ?? archiveName["BackupSteamMRM-".Length..].Split('-')[0],
+                    "yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out DateTime parsed)
+                    ? parsed : DateTime.MinValue;
+                candidates.Add((archivePath, archiveName, date, false));
+            }
+        }
+
+        // Sort by date (oldest first) and delete excess
+        var toDelete = candidates.OrderBy(item => item.Date)
+            .Take(Math.Max(0, candidates.Count - _settings.BackupLimit))
+            .ToArray();
+
+        foreach (var item in toDelete)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (File.Exists(item.Path)) // Archive
+            {
+                File.Delete(item.Path);
+                string metaPath = Path.ChangeExtension(item.Path, ".meta.json");
+                if (File.Exists(metaPath))
+                    File.Delete(metaPath);
+            }
+            else if (Directory.Exists(item.Path)) // Directory
+            {
+                DeleteDirectoryTree(item.Path);
+            }
         }
         await Task.CompletedTask;
     }
@@ -461,7 +712,10 @@ internal sealed class BackupService
         if (!Directory.Exists(oldRoot))
             return [];
 
-        string[] sources = Directory.EnumerateDirectories(oldRoot, "BackupSteamMRM*").ToArray();
+        var sources = new List<string>();
+        sources.AddRange(Directory.EnumerateDirectories(oldRoot, "BackupSteamMRM*"));
+        sources.AddRange(EnumerateArchiveBackups(oldRoot));
+
         if (sources.Any(source => IsSubdirectory(newRoot, source)))
             throw new InvalidOperationException(Localization.Get(
                 "A nova pasta não pode ficar dentro de um backup existente."));
@@ -469,7 +723,7 @@ internal sealed class BackupService
         foreach (string source in sources)
         {
             string destination = Path.Combine(newRoot, Path.GetFileName(source));
-            if (Directory.Exists(destination))
+            if (File.Exists(destination) || Directory.Exists(destination))
                 throw new IOException(Localization.Format("Já existe um backup com o mesmo nome no destino: {0}",
                     Path.GetFileName(source)));
         }
@@ -481,17 +735,33 @@ internal sealed class BackupService
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 string destination = Path.Combine(newRoot, Path.GetFileName(source));
-                await CopyDirectoryAsync(source, destination, cancellationToken);
+                if (Directory.Exists(source))
+                {
+                    await CopyDirectoryAsync(source, destination, cancellationToken);
+                }
+                else
+                {
+                    File.Copy(source, destination);
+                    // Also copy metadata file
+                    string metaSource = Path.ChangeExtension(source, ".meta.json");
+                    if (File.Exists(metaSource))
+                    {
+                        string metaDest = Path.ChangeExtension(destination, ".meta.json");
+                        File.Copy(metaSource, metaDest);
+                    }
+                }
                 copied.Add(destination);
             }
         }
         catch
         {
-            foreach (string path in copied.Where(Directory.Exists))
-                DeleteDirectoryTree(path);
-            string partial = Path.Combine(newRoot, Path.GetFileName(sources[copied.Count]));
-            if (Directory.Exists(partial))
-                DeleteDirectoryTree(partial);
+            foreach (string path in copied.Where(p => Directory.Exists(p) || File.Exists(p)))
+            {
+                if (Directory.Exists(path))
+                    DeleteDirectoryTree(path);
+                else if (File.Exists(path))
+                    File.Delete(path);
+            }
             throw;
         }
         return copied;
@@ -563,6 +833,133 @@ internal sealed class BackupService
             }
             return bytes;
         }, cancellationToken);
+    }
+
+    private async Task CompressBackupAsync(string backupPath, string format, string source, CancellationToken cancellationToken)
+    {
+        string archivePath = Path.ChangeExtension(backupPath, $".{format.ToLowerInvariant()}");
+        if (File.Exists(archivePath))
+            File.Delete(archivePath);
+
+        if (format.Equals("zip", StringComparison.OrdinalIgnoreCase))
+        {
+            await Task.Run(() => ZipFile.CreateFromDirectory(backupPath, archivePath, CompressionLevel.Optimal, false), cancellationToken);
+        }
+        else if (format.Equals("7z", StringComparison.OrdinalIgnoreCase))
+        {
+            string sevenZipPath = await FindSevenZipAsync();
+            if (string.IsNullOrEmpty(sevenZipPath))
+                throw new InvalidOperationException(Localization.Get("7-Zip não encontrado. Instale o 7-Zip ou use formato ZIP."));
+
+            ProcessStartInfo psi = new()
+            {
+                FileName = sevenZipPath,
+                Arguments = $"a -t7z -mx=9 -y \"{archivePath}\" \"{backupPath}\\*\"",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            using Process? proc = Process.Start(psi);
+            if (proc is null)
+                throw new InvalidOperationException(Localization.Get("Não foi possível iniciar o 7-Zip."));
+            await proc.WaitForExitAsync(cancellationToken);
+            if (proc.ExitCode != 0)
+            {
+                string error = await proc.StandardError.ReadToEndAsync();
+                throw new InvalidOperationException(Localization.Format("Erro ao comprimir com 7-Zip: {0}", error));
+            }
+        }
+        else
+        {
+            throw new ArgumentException(Localization.Format("Formato de compressão não suportado: {0}", format));
+        }
+
+        // Verify archive was created
+        if (!File.Exists(archivePath))
+            throw new InvalidOperationException(Localization.Get("Falha ao criar arquivo comprimido."));
+
+        // Capture metadata before deleting the source directory
+        BackupMetadata metadata = ReadMetadata(backupPath);
+
+        // Delete original directory after successful compression
+        DeleteDirectoryTree(backupPath);
+
+        // Update metadata
+        metadata.Compressed = true;
+        metadata.CompressionFormat = format.ToLowerInvariant();
+        metadata.CompressionSource = source;
+        // Write metadata to a companion file since the directory is gone
+        string metaPath = Path.ChangeExtension(archivePath, ".meta.json");
+        string temporary = metaPath + ".tmp";
+        await File.WriteAllTextAsync(temporary, JsonSerializer.Serialize(metadata, JsonOptions), cancellationToken);
+        File.Move(temporary, metaPath, overwrite: true);
+    }
+
+    private async Task<string> FindSevenZipAsync()
+    {
+        // Check common installation paths
+        string[] possiblePaths =
+        [
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "7-Zip", "7z.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "7-Zip", "7z.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "7-Zip", "7za.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "7-Zip", "7za.exe")
+        ];
+
+        foreach (string path in possiblePaths)
+        {
+            if (File.Exists(path))
+                return path;
+        }
+
+        // Check if 7z is in PATH
+        try
+        {
+            ProcessStartInfo psi = new()
+            {
+                FileName = "7z.exe",
+                Arguments = "--version",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true
+            };
+            using Process? proc = Process.Start(psi);
+            if (proc is not null)
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                await proc.WaitForExitAsync(cts.Token);
+                if (proc.ExitCode == 0)
+                    return "7z.exe";
+            }
+        }
+        catch
+        {
+            // Ignore
+        }
+
+        return "";
+    }
+
+    public async Task CompressBackupManualAsync(string folder, string format, CancellationToken cancellationToken = default)
+    {
+        await _operationLock.WaitAsync(cancellationToken);
+        try
+        {
+            string backupPath = GetBackupDirectory(folder);
+            if (!Directory.Exists(backupPath))
+                throw new DirectoryNotFoundException(Localization.Get("O backup selecionado já não existe."));
+
+            BackupMetadata metadata = ReadMetadata(backupPath);
+            if (metadata.Compressed)
+                throw new InvalidOperationException(Localization.Get("Este backup já está comprimido."));
+
+            await CompressBackupAsync(backupPath, format, "manual", cancellationToken);
+        }
+        finally
+        {
+            _operationLock.Release();
+        }
     }
 
     private static async Task CloseSteamAsync(CancellationToken cancellationToken)

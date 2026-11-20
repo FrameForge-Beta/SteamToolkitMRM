@@ -35,6 +35,12 @@ internal sealed class AppSettings
     [JsonConverter(typeof(BackupHistoryConverter))]
     public List<string> BackupHistory { get; set; } = [];
 
+    [JsonPropertyName("compression_enabled")]
+    public bool CompressionEnabled { get; set; } = false;
+
+    [JsonPropertyName("compression_format")]
+    public string CompressionFormat { get; set; } = "zip"; // "zip" or "7z"
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? AdditionalData { get; set; }
 }
@@ -78,6 +84,15 @@ internal sealed class BackupMetadata
     [JsonPropertyName("custom_name")]
     public string? CustomName { get; set; }
 
+    [JsonPropertyName("compressed")]
+    public bool Compressed { get; set; }
+
+    [JsonPropertyName("compression_format")]
+    public string? CompressionFormat { get; set; }
+
+    [JsonPropertyName("compression_source")]
+    public string? CompressionSource { get; set; } // "manual" or "auto"
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? AdditionalData { get; set; }
 }
@@ -90,6 +105,14 @@ internal sealed class BackupEntry
     public required string SizeLabel { get; init; }
     public required string SizeSortKey { get; init; }
     public bool Pinned { get; init; }
+    public bool Compressed { get; init; }
+    public string? CompressionFormat { get; init; }
+    public string? CompressionSource { get; init; }
+    public bool IsManuallyCompressed => string.Equals(CompressionSource, "manual", StringComparison.OrdinalIgnoreCase);
+    public bool IsAutoCompressed => string.Equals(CompressionSource, "auto", StringComparison.OrdinalIgnoreCase);
+    public bool IsNotManuallyCompressed => !IsManuallyCompressed;
+    public bool IsNotCompressed => !Compressed;
+    public bool IsProtectedFromDeletion => IsManuallyCompressed || Pinned;
 }
 
 internal sealed class PinLabelConverter : IValueConverter
@@ -97,6 +120,36 @@ internal sealed class PinLabelConverter : IValueConverter
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         return Localization.Get(value is true ? "Desafixar" : "Fixar");
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        throw new NotSupportedException();
+    }
+}
+
+internal sealed class InverseBooleanConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        return value is bool b && !b;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        throw new NotSupportedException();
+    }
+}
+
+internal sealed class CompressionBadgeConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is not BackupEntry entry || !entry.Compressed)
+            return string.Empty;
+
+        string format = (entry.CompressionFormat ?? "zip").ToUpperInvariant();
+        return $"{Localization.Get("Compactado")} · {format}";
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

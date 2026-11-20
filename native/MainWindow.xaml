@@ -4,7 +4,7 @@
         Icon="/SteamToolkitMRM;component/Assets/SteamToolkitMRM.ico"
         Title="Steam Toolkit MRM" Width="1120" Height="760"
         MinWidth="940" MinHeight="650" WindowStartupLocation="CenterScreen"
-        Background="{StaticResource WindowBrush}" Foreground="{StaticResource TextBrush}"
+        Background="{DynamicResource WindowBrush}" Foreground="{DynamicResource TextBrush}"
         FontFamily="Segoe UI">
     <Grid>
         <Grid.ColumnDefinitions>
@@ -12,14 +12,18 @@
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <Border Grid.Column="0" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}"
+        <Border Grid.Column="0" Background="{DynamicResource SidebarBrush}" BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,0,1,0">
             <DockPanel Margin="18,22">
                 <StackPanel DockPanel.Dock="Top">
                     <StackPanel Orientation="Horizontal" Margin="4,2,0,32">
-                        <Border Width="38" Height="38" CornerRadius="11" Background="#302449">
-                            <TextBlock Text="S" Foreground="{DynamicResource AccentBrush}" FontSize="23"
-                                       FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <Border Width="44" Height="44" CornerRadius="13"
+                                Background="{DynamicResource AccentSoftBrush}"
+                                BorderBrush="{DynamicResource AccentBorderBrush}" BorderThickness="1">
+                            <Image Source="/SteamToolkitMRM;component/Assets/SteamToolkitMRM_largest.png"
+                                   Width="34" Height="34" Stretch="Uniform"
+                                   RenderOptions.BitmapScalingMode="HighQuality"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <StackPanel Margin="11,1,0,0" VerticalAlignment="Center">
                             <TextBlock Text="STEAM TOOLKIT" FontWeight="Bold" FontSize="12" Foreground="#AFC2E5"/>
@@ -27,32 +31,32 @@
                         </StackPanel>
                     </StackPanel>
                     <TextBlock Text="ESPAÇO DE TRABALHO" FontSize="10" FontWeight="Bold"
-                               Foreground="{StaticResource MutedBrush}" Margin="8,0,0,10"/>
-                    <Button x:Name="BackupsNav" Click="BackupsNav_Click" HorizontalContentAlignment="Left"
-                            Background="#263756" BorderBrush="#314B73" Padding="12,11" Margin="0,0,0,6">
+                               Foreground="{DynamicResource MutedBrush}" Margin="8,0,0,10"/>
+                    <RadioButton x:Name="BackupsNav" GroupName="Navigation" IsChecked="True" Click="BackupsNav_Click"
+                         Style="{StaticResource NavItemStyle}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="▣" Foreground="{DynamicResource AccentBrush}" FontSize="17" Width="27"/>
                             <TextBlock Text="Backups" VerticalAlignment="Center"/>
                         </StackPanel>
-                    </Button>
-                    <Button x:Name="SettingsNav" Click="SettingsNav_Click" HorizontalContentAlignment="Left"
-                            Background="Transparent" BorderBrush="Transparent" Padding="12,11">
+                    </RadioButton>
+                    <RadioButton x:Name="SettingsNav" GroupName="Navigation" Click="SettingsNav_Click"
+                         Style="{StaticResource NavItemStyle}">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="⚙" Foreground="{StaticResource MutedBrush}" FontSize="16" Width="27"/>
+                            <TextBlock Text="⚙" Foreground="{DynamicResource MutedBrush}" FontSize="16" Width="27"/>
                             <TextBlock Text="Definições" VerticalAlignment="Center"/>
                         </StackPanel>
-                    </Button>
+                    </RadioButton>
                 </StackPanel>
 
                 <StackPanel DockPanel.Dock="Bottom" Margin="2,18,2,0">
-                    <Border Background="#10192A" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                    <Border Background="#10192A" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                             CornerRadius="10" Padding="12" Margin="0,0,0,12">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,7">
-                                <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="{StaticResource GreenBrush}"
+                                <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="{DynamicResource GreenBrush}"
                                          VerticalAlignment="Center" Margin="0,0,8,0"/>
                                 <TextBlock x:Name="SteamStatusText" Text="A verificar Steam..." FontSize="11"
-                                           Foreground="{StaticResource MutedBrush}"/>
+                                           Foreground="{DynamicResource MutedBrush}"/>
                             </StackPanel>
                             <TextBlock Text="A monitorização automática funciona enquanto a aplicação estiver aberta."
                                        TextWrapping="Wrap" FontSize="10" Foreground="#74839B" LineHeight="15"/>
@@ -74,30 +78,44 @@
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
                 <DockPanel Grid.Row="0" Margin="0,2,0,22">
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                        <Button x:Name="OpenLudusaviButton" Click="OpenLudusavi_Click" Margin="0,0,8,0"
-                                Background="Transparent" BorderBrush="{StaticResource BorderBrush}" Padding="12,9">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="↗" Foreground="{DynamicResource AccentBrush}" Margin="0,0,8,0"/>
-                                <TextBlock Text="Abrir Ludusavi"/>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="OpenLudusaviButton" Click="OpenLudusavi_Click" Margin="0,0,10,0"
+                                Background="{DynamicResource PanelAltBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}" Padding="14,9"
+                                ToolTip="Abrir Ludusavi">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Viewbox Width="13" Height="13" Margin="0,0,9,0" VerticalAlignment="Center">
+                                    <Path Data="M 4 1 L 11 1 L 11 8 M 11 1 L 5 7 M 2 3 L 2 11 L 10 11 L 10 8"
+                                          Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.6"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                          StrokeLineJoin="Round"/>
+                                </Viewbox>
+                                <TextBlock Text="Abrir Ludusavi" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                         <Button x:Name="OpenFolderButton" Click="OpenFolder_Click"
-                                Background="Transparent" BorderBrush="{StaticResource BorderBrush}" Padding="12,9">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="▣" Foreground="{DynamicResource AccentBrush}" Margin="0,0,8,0"/>
-                                <TextBlock Text="Abrir pasta"/>
+                                Background="{DynamicResource PanelAltBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}" Padding="14,9"
+                                ToolTip="Abrir pasta">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Viewbox Width="13" Height="13" Margin="0,0,9,0" VerticalAlignment="Center">
+                                    <Path Data="M 1 3.5 L 1 10 L 12 10 L 12 4.5 L 6.2 4.5 L 5 2.5 L 1 2.5 Z"
+                                          Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.5"
+                                          StrokeLineJoin="Round"/>
+                                </Viewbox>
+                                <TextBlock Text="Abrir pasta" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                     </StackPanel>
                     <StackPanel>
                         <TextBlock Text="Os teus backups" FontSize="26" FontWeight="Bold"/>
                         <TextBlock Text="Guarda e restaura os dados da tua biblioteca Steam e Lua Tools."
-                                   Foreground="{StaticResource MutedBrush}" Margin="1,5,0,0"/>
+                                   Foreground="{DynamicResource MutedBrush}" Margin="1,5,0,0"/>
                     </StackPanel>
                 </DockPanel>
 
-                <Border Grid.Row="1" Background="#211B35" BorderBrush="#3D3159" BorderThickness="1"
+                <Border Grid.Row="1" Background="{DynamicResource BannerBrush}"
+                        BorderBrush="{DynamicResource BannerBorderBrush}" BorderThickness="1"
                         CornerRadius="12" Padding="18" Margin="0,0,0,18">
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -106,15 +124,23 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="Protege o teu progresso" FontSize="16" FontWeight="SemiBold"/>
-                            <TextBlock Text="Inclui userdata, estatísticas, depotcache e st-plug-in."
-                                       Foreground="#C5B9DC" FontSize="12" Margin="0,5,0,0"/>
+                            <TextBlock Text="Inclui userdata, estatísticas e depotcache."
+                                       Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="0,5,0,0"/>
                         </StackPanel>
                         <Button x:Name="CreateBackupButton" Grid.Column="1" Click="CreateBackup_Click"
-                                Background="{DynamicResource AccentBrush}" BorderBrush="{DynamicResource AccentBrush}"
-                                Foreground="#08101E" Padding="17,11" MinWidth="150">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="＋" Foreground="#FFFFFF" FontSize="16" FontWeight="Bold" Margin="0,0,7,0"/>
-                                <TextBlock Text="Criar backup"/>
+                                Background="{DynamicResource SuccessBrush}"
+                                BorderBrush="{DynamicResource SuccessBorderBrush}"
+                                Foreground="#FFFFFF" Padding="20,11" MinWidth="168" MinHeight="44"
+                                VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                        HorizontalAlignment="Center">
+                                <Viewbox Width="12" Height="12" Margin="0,0,9,0" VerticalAlignment="Center">
+                                    <Path Data="M 0 5 L 10 5 M 5 0 L 5 10" Stroke="#FFFFFF"
+                                          StrokeThickness="2" StrokeStartLineCap="Round"
+                                          StrokeEndLineCap="Round"/>
+                                </Viewbox>
+                                <TextBlock Text="Criar backup" Foreground="#FFFFFF" FontSize="13"
+                                           FontWeight="SemiBold" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                     </Grid>
@@ -125,29 +151,36 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Histórico de backups" FontSize="16" FontWeight="SemiBold"/>
-                        <Border Background="#202D43" CornerRadius="10" Padding="8,3" Margin="10,0,0,0">
-                            <TextBlock x:Name="BackupCountText" Text="0" FontSize="11" Foreground="#C3D0E4"/>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="Histórico de backups" FontSize="16" FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                        <Border Background="#202D43" CornerRadius="10" Padding="8,2" Margin="10,0,0,0"
+                                VerticalAlignment="Center" HorizontalAlignment="Left"
+                                MinWidth="24" Height="20">
+                            <TextBlock x:Name="BackupCountText" Text="0" FontSize="11"
+                                       Foreground="#C3D0E4" HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
                         </Border>
                     </StackPanel>
-                    <Button Grid.Column="1" Click="Refresh_Click" Background="Transparent" BorderBrush="Transparent"
-                            Foreground="{StaticResource MutedBrush}" Padding="9,5">
+                    <Button Grid.Column="1" Click="Refresh_Click" HorizontalAlignment="Right"
+                            VerticalAlignment="Center" Background="{DynamicResource PanelAltBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}" Padding="12,7" FontSize="11.5"
+                            ToolTip="Atualiza a lista de backups">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="↻" FontSize="17" Margin="0,0,6,0"/>
-                            <TextBlock Text="Atualizar"/>
+                            <TextBlock Text="↻" FontSize="14" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Atualizar" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </Grid>
 
-                <Border Grid.Row="3" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}"
+                <Border Grid.Row="3" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="1" CornerRadius="12" Padding="10">
                     <Grid>
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <ItemsControl x:Name="BackupList">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Background="{StaticResource CardBrush}" BorderBrush="#26354D"
+                                        <Border Background="{DynamicResource CardBrush}" BorderBrush="#26354D"
                                                 BorderThickness="1" CornerRadius="9" Padding="13" Margin="2,2,2,8">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
@@ -158,27 +191,42 @@
                                                     <StackPanel Orientation="Horizontal">
                                                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
                                                                    FontSize="13" TextTrimming="CharacterEllipsis"
-                                                                   MaxWidth="440"/>
+                                                                   MaxWidth="440" VerticalAlignment="Center"/>
                                                         <TextBlock Text="  ◆" Foreground="{DynamicResource AccentBrush}"
+                                                                   VerticalAlignment="Center"
                                                                    Visibility="{Binding Pinned, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                                        <Border Background="#17324A" BorderBrush="#2E5F8A"
+                                                                BorderThickness="1" CornerRadius="6"
+                                                                Padding="7,1" Margin="8,0,0,0"
+                                                                VerticalAlignment="Center"
+                                                                ToolTip="Backup comprimido"
+                                                                Visibility="{Binding Compressed, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                            <TextBlock Text="{Binding Converter={StaticResource CompressionBadgeConverter}}"
+                                                                       FontSize="9.5" FontWeight="SemiBold"
+                                                                       Foreground="#8FD0FF" VerticalAlignment="Center"/>
+                                                        </Border>
                                                     </StackPanel>
-                                                    <TextBlock Text="{Binding DateLabel}" Foreground="{StaticResource MutedBrush}"
+                                                    <TextBlock Text="{Binding DateLabel}" Foreground="{DynamicResource MutedBrush}"
                                                                FontSize="11" Margin="0,5,0,0"/>
                                                     <TextBlock Text="{Binding SizeLabel}" Foreground="#7788A2"
                                                                FontSize="10" Margin="0,3,0,0"/>
                                                 </StackPanel>
                                                 <WrapPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
-                                                    <Button Content="{Binding Pinned, Converter={StaticResource PinLabelConverter}}"
-                                                            Tag="{Binding}" Click="PinBackup_Click" Margin="0,0,6,0"
-                                                            Padding="9,7" FontSize="11"/>
+                                                    <Button Content="{Binding Pinned, Converter={StaticResource PinLabelConverter}}" Tag="{Binding}"
+                                                            Click="PinBackup_Click" Margin="0,0,6,0" Padding="9,7" FontSize="11"/>
                                                     <Button Content="Renomear" Tag="{Binding}" Click="RenameBackup_Click"
                                                             Margin="0,0,6,0" Padding="9,7" FontSize="11"/>
                                                     <Button Content="Restaurar" Tag="{Binding}" Click="RestoreBackup_Click"
-                                                            Background="#35264D" BorderBrush="#644A91"
-                                                            Margin="0,0,6,0" Padding="10,7" FontSize="11"/>
+                                                            Background="#35264D" BorderBrush="#644A91" Margin="0,0,6,0" Padding="10,7" FontSize="11"/>
+                                                    <Button Content="Comprimir" Tag="{Binding}" Click="CompressBackup_Click"
+                                                            Background="#1E2B3F" BorderBrush="#2F466A"
+                                                            Margin="0,0,6,0" Padding="10,7" FontSize="11"
+                                                            Visibility="{Binding IsNotCompressed, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                            ToolTip="Comprime este backup (protegido contra eliminação)"/>
                                                     <Button Content="Apagar" Tag="{Binding}" Click="DeleteBackup_Click"
-                                                            Background="#3A222C" BorderBrush="#5E3443"
-                                                            Foreground="#F6A7B2" Padding="9,7" FontSize="11"/>
+                                                            Background="#3A222C" BorderBrush="#5E3443" Foreground="#F6A7B2" Padding="9,7" FontSize="11"
+                                                            IsEnabled="{Binding IsProtectedFromDeletion, Converter={StaticResource InverseBooleanConverter}}"
+                                                            ToolTip="Não é possível apagar backups fixados ou comprimidos manualmente"/>
                                                 </WrapPanel>
                                             </Grid>
                                         </Border>
@@ -191,13 +239,13 @@
                             <TextBlock Text="Ainda não há backups" FontSize="17" FontWeight="SemiBold"
                                        HorizontalAlignment="Center"/>
                             <TextBlock Text="Cria o primeiro backup ou inicia um jogo com a monitorização ativa."
-                                       Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,7,0,0"
+                                       Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="0,7,0,0"
                                        HorizontalAlignment="Center"/>
                         </StackPanel>
                     </Grid>
                 </Border>
                 <TextBlock x:Name="FooterText" Grid.Row="4" TextTrimming="CharacterEllipsis"
-                           Foreground="{StaticResource MutedBrush}" FontSize="10" Margin="3,9,0,0"/>
+                           Foreground="{DynamicResource MutedBrush}" FontSize="10" Margin="3,9,0,0"/>
             </Grid>
 
             <Grid x:Name="SettingsView" Visibility="Collapsed">
@@ -208,11 +256,11 @@
                 <StackPanel Margin="0,2,0,22">
                     <TextBlock Text="Definições" FontSize="26" FontWeight="Bold"/>
                     <TextBlock Text="Configura o comportamento e o local de armazenamento."
-                               Foreground="{StaticResource MutedBrush}" Margin="1,5,0,0"/>
+                               Foreground="{DynamicResource MutedBrush}" Margin="1,5,0,0"/>
                 </StackPanel>
                 <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                     <StackPanel>
-                        <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}"
+                        <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
                                 BorderThickness="1" CornerRadius="12" Padding="20" Margin="0,0,0,14">
                             <StackPanel>
                                 <TextBlock Text="Automação" FontSize="15" FontWeight="SemiBold"/>
@@ -223,11 +271,11 @@
                                           Content="Criar backup automaticamente quando um jogo fechar"
                                           Margin="0,0,0,4"/>
                                 <TextBlock Text="A monitorização usa o estado de execução da Steam e só funciona enquanto esta aplicação estiver aberta."
-                                           Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap"
                                            Margin="23,2,0,0"/>
                             </StackPanel>
                         </Border>
-                        <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}"
+                        <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
                                 BorderThickness="1" CornerRadius="12" Padding="20" Margin="0,0,0,14">
                             <StackPanel>
                                 <TextBlock Text="Arranque do Windows" FontSize="15" FontWeight="SemiBold"/>
@@ -238,11 +286,11 @@
                                           Margin="0,0,0,4"/>
                             </StackPanel>
                         </Border>
-                        <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}"
+                        <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
                                 BorderThickness="1" CornerRadius="12" Padding="20" Margin="0,0,0,14">
                             <StackPanel>
                                 <TextBlock Text="Idioma" FontSize="15" FontWeight="SemiBold"/>
-                                <TextBlock Text="Idioma da aplicação" Foreground="{StaticResource MutedBrush}"
+                                <TextBlock Text="Idioma da aplicação" Foreground="{DynamicResource MutedBrush}"
                                            FontSize="11" Margin="0,8,0,8"/>
                                 <ComboBox x:Name="LanguageComboBox" Width="220" HorizontalAlignment="Left"
                                           VerticalContentAlignment="Center">
@@ -253,16 +301,16 @@
                                 </ComboBox>
                             </StackPanel>
                         </Border>
-                        <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}"
+                        <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
                                 BorderThickness="1" CornerRadius="12" Padding="20" Margin="0,0,0,14">
                             <StackPanel>
                                 <TextBlock Text="Aparência" FontSize="15" FontWeight="SemiBold"/>
                                 <TextBlock Text="Escolhe uma cor na grelha ou escreve o seu código hexadecimal."
-                                           Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,8,0,10"/>
+                                           Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,8,0,10"/>
                                 <StackPanel Orientation="Horizontal">
                                     <Button x:Name="AccentPickerButton" Click="AccentPicker_Click"
                                             Width="34" Height="34" Padding="0" Margin="0,0,10,0"
-                                            Background="Transparent" BorderBrush="{StaticResource BorderBrush}"
+                                            Background="Transparent" BorderBrush="{DynamicResource BorderBrush}"
                                             ToolTip="Clica para abrir a grelha de cores">
                                         <Border x:Name="AccentPreview" Width="24" Height="24" CornerRadius="5"
                                                 Background="{DynamicResource AccentBrush}"/>
@@ -272,12 +320,12 @@
                                 </StackPanel>
                             </StackPanel>
                         </Border>
-                        <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}"
+                        <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
                                 BorderThickness="1" CornerRadius="12" Padding="20" Margin="0,0,0,14">
                             <StackPanel>
                                 <TextBlock Text="Armazenamento" FontSize="15" FontWeight="SemiBold"/>
                                 <TextBlock Text="Pasta dos backups (deixa vazio para usar a pasta backups junto da aplicação)"
-                                           Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,8,0,8"/>
+                                           Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,8,0,8"/>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
@@ -293,28 +341,62 @@
                                 </Grid>
                                 <TextBlock x:Name="BackupPathDescription"
                                            Text="O caminho será usado a partir do próximo backup."
-                                           Foreground="{StaticResource MutedBrush}" FontSize="11"
+                                           Foreground="{DynamicResource MutedBrush}" FontSize="11"
                                            TextWrapping="Wrap" Margin="0,12,0,0"/>
                             </StackPanel>
                         </Border>
-                        <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}"
+                        <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
                                 BorderThickness="1" CornerRadius="12" Padding="20" Margin="0,0,0,14">
                             <StackPanel>
                                 <TextBlock Text="Histórico" FontSize="15" FontWeight="SemiBold"/>
                                 <TextBlock Text="Limite de backups automáticos e manuais não fixados"
-                                           Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,8,0,10"/>
+                                           Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,8,0,10"/>
                                 <TextBox x:Name="BackupLimitTextBox" Width="100" HorizontalAlignment="Left"
                                          VerticalContentAlignment="Center"/>
                                 <TextBlock Text="Backups fixados são preservados mesmo quando o limite é atingido."
-                                           Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,9,0,0"/>
+                                           Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,9,0,0"/>
                             </StackPanel>
                         </Border>
+
+                        <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="1" CornerRadius="12" Padding="20" Margin="0,0,0,14">
+                            <StackPanel>
+                                <TextBlock Text="Compressão de backups" FontSize="15" FontWeight="SemiBold"/>
+                                <TextBlock Text="Comprime automaticamente novos backups para poupar espaço. Backups comprimidos manualmente são protegidos contra eliminação."
+                                           Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,8,0,12" TextWrapping="Wrap"/>
+                                <CheckBox x:Name="CompressionEnabledCheckBox" Content="Ativar compressão automática de backups"
+                                          Margin="0,0,0,10" VerticalAlignment="Center"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
+                                    <TextBlock Text="Formato:" VerticalAlignment="Center" Margin="0,0,12,0" Foreground="{DynamicResource MutedBrush}"/>
+                                    <ComboBox x:Name="CompressionFormatComboBox" Width="100" VerticalAlignment="Center"
+                                              IsEnabled="{Binding IsChecked, ElementName=CompressionEnabledCheckBox}">
+                                        <ComboBoxItem Tag="zip" Content="ZIP (.zip)"/>
+                                        <ComboBoxItem Tag="7z" Content="7Z (.7z) - melhor compressão"/>
+                                    </ComboBox>
+                                </StackPanel>
+                                <Border Background="#33280F" BorderBrush="#6B5426" BorderThickness="1"
+                                        CornerRadius="8" Padding="12,10" Margin="0,14,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="⚠ Atenção" FontSize="11.5" FontWeight="SemiBold"
+                                                   Foreground="#F5C97A"/>
+                                        <TextBlock Text="Recomendamos usar o formato ZIP: funciona sempre no Windows e não precisa de nenhum programa instalado. O formato 7Z só funciona se tiveres o 7-Zip instalado no computador (7z.exe)."
+                                                   FontSize="11" Foreground="#E8D3A8" TextWrapping="Wrap"
+                                                   LineHeight="16" Margin="0,5,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
                         <Button x:Name="SaveSettingsButton" Content="Guardar definições" Click="SaveSettings_Click"
-                                Background="{DynamicResource AccentBrush}" BorderBrush="{DynamicResource AccentBrush}"
-                                Foreground="#08101E" HorizontalAlignment="Right" Padding="18,11"/>
+                                Background="{DynamicResource SuccessBrush}"
+                                BorderBrush="{DynamicResource SuccessBorderBrush}"
+                                Foreground="#FFFFFF" HorizontalAlignment="Right" Padding="18,11"/>
                     </StackPanel>
                 </ScrollViewer>
             </Grid>
         </Grid>
     </Grid>
 </Window>
+
+
+

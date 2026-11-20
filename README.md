@@ -2,7 +2,7 @@
 
 **A native Windows application for creating, managing, and restoring Steam and Lua Tools backups.**
 
-Steam Toolkit MRM replaces the former Steam plugin with a standalone WPF desktop app. It preserves the legacy `BackupSteamMRM-*` backup format and provides a clean interface for backups, restore, retention, and automation.
+Steam Toolkit MRM is a standalone WPF desktop app. It preserves the legacy `BackupSteamMRM-*` backup format and provides a clean interface for backups, restore, retention, and automation.
 
 **GitHub description:** A native Windows app for creating, managing, and restoring Steam and Lua Tools backups.
 
@@ -12,7 +12,7 @@ Download the latest Windows installer from [GitHub Releases](https://github.com/
 
 ## Features
 
-- Backs up Steam `userdata`, `appcache/stats`, `depotcache`, and `config/stplug-in`.
+- Backs up Steam `userdata`, `appcache/stats`, and `depotcache`.
 - Restores legacy backups while preserving unrelated files.
 - Lists, pins, renames, restores, and deletes backups.
 - Optional automatic backups when a game starts or closes.

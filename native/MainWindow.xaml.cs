@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
@@ -11,6 +12,8 @@ namespace SteamToolkitMRM;
 
 public partial class MainWindow : Window
 {
+    private static readonly Color PanelBaseColor = Color.FromRgb(0x12, 0x1A, 0x28);
+
     private readonly BackupService _backupService = new();
     private readonly ObservableCollection<BackupEntry> _backups = [];
     private readonly DispatcherTimer _monitorTimer = new() { Interval = TimeSpan.FromSeconds(2) };
@@ -22,6 +25,7 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        WindowTheme.Apply(this);
         InitializeComponent();
         Localization.SetLanguage(_backupService.Settings.Language);
         Localization.Apply(this);
@@ -42,6 +46,18 @@ public partial class MainWindow : Window
         };
         StateChanged += MainWindow_StateChanged;
         Closing += MainWindow_Closing;
+    }
+
+    public void BringToFront()
+    {
+        if (!IsVisible)
+            Show();
+        ShowInTaskbar = true;
+        if (WindowState == WindowState.Minimized)
+            WindowState = WindowState.Normal;
+        Activate();
+        Topmost = true;
+        Topmost = false;
     }
 
     private async void CreateBackup_Click(object sender, RoutedEventArgs e)
@@ -84,7 +100,6 @@ public partial class MainWindow : Window
     {
         BackupsView.Visibility = Visibility.Visible;
         SettingsView.Visibility = Visibility.Collapsed;
-        SetNavigationState(backupsSelected: true);
     }
 
     private void SettingsNav_Click(object sender, RoutedEventArgs e)
@@ -92,14 +107,12 @@ public partial class MainWindow : Window
         LoadSettingsIntoForm();
         BackupsView.Visibility = Visibility.Collapsed;
         SettingsView.Visibility = Visibility.Visible;
-        SetNavigationState(backupsSelected: false);
     }
 
     private void BrowseBackupPath_Click(object sender, RoutedEventArgs e)
     {
-        string initialDirectory = Directory.Exists(BackupPathTextBox.Text.Trim())
-            ? BackupPathTextBox.Text.Trim()
-            : _backupService.BackupRoot;
+        string current = BackupPathTextBox.Text.Trim();
+        string initialDirectory = Directory.Exists(current) ? current : _backupService.BackupRoot;
         var dialog = new OpenFolderDialog
         {
             Title = Localization.Get("Escolher pasta para backups"),
@@ -118,7 +131,11 @@ public partial class MainWindow : Window
     {
         var picker = new ColorPickerDialog(PrimaryColorTextBox.Text) { Owner = this };
         if (picker.ShowDialog() == true)
+        {
             PrimaryColorTextBox.Text = picker.SelectedColor;
+            if (TryParseAccentColor(picker.SelectedColor, out Color accentColor))
+                ApplyAccentColor(accentColor);
+        }
     }
 
     private async void SaveSettings_Click(object sender, RoutedEventArgs e)
@@ -182,12 +199,15 @@ public partial class MainWindow : Window
         }
 
         string language = Localization.GetLanguageCode(LanguageComboBox.SelectedIndex);
+        string compressionFormat = (CompressionFormatComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "zip";
         await RunOperationAsync(Localization.Get("A guardar definições..."), async () =>
         {
             await _backupService.SaveSettingsAsync(limit, path, AutoBackupOnCloseCheckBox.IsChecked == true,
                 AutoBackupOnStartCheckBox.IsChecked == true, FormatAccentColor(accentColor), moveExistingBackups,
                 StartWithWindowsCheckBox.IsChecked == true, StartMinimizedToTrayCheckBox.IsChecked == true,
-                language: language);
+                language: language,
+                compressionEnabled: CompressionEnabledCheckBox.IsChecked == true,
+                compressionFormat: compressionFormat);
             Localization.SetLanguage(language);
             Localization.Apply(this);
             UpdateTrayLanguage();
@@ -272,6 +292,29 @@ public partial class MainWindow : Window
         });
     }
 
+    private async void CompressBackup_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: BackupEntry backup })
+            return;
+
+        string format = "zip";
+        MessageBoxResult choice = MessageBox.Show(this,
+            Localization.Get("Escolhe o formato de compressão:\n\nSim = ZIP (.zip) - compatível com Windows\nNão = 7Z (.7z) - melhor compressão, requer 7-Zip instalado"),
+            Localization.Get("Comprimir backup"), MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        if (choice == MessageBoxResult.Cancel)
+            return;
+        format = choice == MessageBoxResult.Yes ? "zip" : "7z";
+
+        await RunOperationAsync(Localization.Get("A comprimir backup..."), async () =>
+        {
+            await _backupService.CompressBackupManualAsync(backup.Folder, format);
+            await RefreshBackupsAsync();
+            FooterText.Text = Localization.Format("Backup comprimido como {0}.", format.ToUpperInvariant());
+            MessageBox.Show(this, Localization.Format("O backup foi comprimido com sucesso como {0}.\n\nEste backup está agora protegido contra eliminação.", format.ToUpperInvariant()),
+                Localization.Get("Compressão concluída"), MessageBoxButton.OK, MessageBoxImage.Information);
+        });
+    }
+
     private async void MonitorTimer_Tick(object? sender, EventArgs e)
     {
         if (_monitorCheckInProgress)
@@ -329,14 +372,16 @@ public partial class MainWindow : Window
     {
         try
         {
+            if (!_operationInProgress)
+                FooterText.Text = Localization.Get("A carregar backups...");
             IReadOnlyList<BackupEntry> backups = await _backupService.ListBackupsAsync();
             _backups.Clear();
             foreach (BackupEntry backup in backups)
                 _backups.Add(backup);
             BackupCountText.Text = backups.Count.ToString();
             EmptyState.Visibility = backups.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-            FooterText.Text = Localization.Format("Local: {0}", _backupService.BackupRoot);
             Localization.Apply(BackupList);
+            FooterText.Text = Localization.Format("Local: {0}", _backupService.BackupRoot);
         }
         catch (Exception ex)
         {
@@ -350,10 +395,6 @@ public partial class MainWindow : Window
             return;
 
         _operationInProgress = true;
-        CreateBackupButton.IsEnabled = false;
-        OpenFolderButton.IsEnabled = false;
-        OpenLudusaviButton.IsEnabled = false;
-        SaveSettingsButton.IsEnabled = false;
         FooterText.Text = status;
         try
         {
@@ -366,10 +407,6 @@ public partial class MainWindow : Window
         finally
         {
             _operationInProgress = false;
-            CreateBackupButton.IsEnabled = true;
-            OpenFolderButton.IsEnabled = true;
-            OpenLudusaviButton.IsEnabled = true;
-            SaveSettingsButton.IsEnabled = true;
         }
     }
 
@@ -384,6 +421,11 @@ public partial class MainWindow : Window
         StartWithWindowsCheckBox.IsChecked = _backupService.Settings.StartWithWindows;
         StartMinimizedToTrayCheckBox.IsChecked = _backupService.Settings.StartMinimizedToTray;
         LanguageComboBox.SelectedIndex = Localization.GetLanguageIndex(_backupService.Settings.Language);
+        CompressionEnabledCheckBox.IsChecked = _backupService.Settings.CompressionEnabled;
+        if (CompressionFormatComboBox.Items.Cast<ComboBoxItem>().Any(item => item.Tag?.ToString() == _backupService.Settings.CompressionFormat))
+            CompressionFormatComboBox.SelectedIndex = CompressionFormatComboBox.Items.IndexOf(CompressionFormatComboBox.Items.Cast<ComboBoxItem>().First(item => item.Tag?.ToString() == _backupService.Settings.CompressionFormat));
+        else
+            CompressionFormatComboBox.SelectedIndex = 0;
         UpdateAccentPreview();
     }
 
@@ -428,9 +470,54 @@ public partial class MainWindow : Window
 
     private void ApplyAccentColor(Color accentColor)
     {
-        Application.Current.Resources["AccentBrush"] = new SolidColorBrush(accentColor);
+        var resources = Application.Current.Resources;
+
+        // Base dark colors with visible accent tint
+        resources["WindowBrush"] = new SolidColorBrush(Blend(accentColor, Color.FromRgb(0x0A, 0x0F, 0x19), 0.22));
+        resources["SidebarBrush"] = new SolidColorBrush(Blend(accentColor, Color.FromRgb(0x0D, 0x14, 0x21), 0.20));
+        resources["PanelBrush"] = new SolidColorBrush(Blend(accentColor, Color.FromRgb(0x12, 0x1A, 0x28), 0.18));
+        resources["PanelAltBrush"] = new SolidColorBrush(Blend(accentColor, Color.FromRgb(0x17, 0x22, 0x33), 0.16));
+        resources["CardBrush"] = new SolidColorBrush(Blend(accentColor, Color.FromRgb(0x15, 0x1F, 0x2F), 0.14));
+        resources["BorderBrush"] = new SolidColorBrush(Blend(accentColor, Color.FromRgb(0x22, 0x30, 0x47), 0.25));
+        resources["BorderStrongBrush"] = new SolidColorBrush(Blend(accentColor, Color.FromRgb(0x2E, 0x40, 0x5B), 0.28));
+        resources["BannerBrush"] = new SolidColorBrush(Blend(accentColor, Color.FromRgb(0x14, 0x1C, 0x2A), 0.30));
+        resources["BannerBorderBrush"] = new SolidColorBrush(Blend(accentColor, Color.FromRgb(0x2A, 0x3A, 0x52), 0.42));
+
+        // Accent palette
+        resources["AccentBrush"] = new SolidColorBrush(accentColor);
+        resources["AccentSoftBrush"] = new SolidColorBrush(Blend(accentColor, PanelBaseColor, 0.16));
+        resources["AccentBorderBrush"] = new SolidColorBrush(Blend(accentColor, PanelBaseColor, 0.46));
+        resources["AccentContrastBrush"] = new SolidColorBrush(
+            RelativeLuminance(accentColor) > 0.32 ? Color.FromRgb(0x0B, 0x10, 0x1A) : Colors.White);
+
+        // Keep the native title bar in sync with the window background
+        if (resources["WindowBrush"] is SolidColorBrush windowBrush)
+            WindowTheme.UpdateCaption(this, windowBrush.Color);
+
         if (AccentPreview is not null)
             AccentPreview.Background = new SolidColorBrush(accentColor);
+    }
+
+    private static Color Blend(Color foreground, Color background, double amount)
+    {
+        amount = Math.Clamp(amount, 0, 1);
+        return Color.FromRgb(
+            (byte)Math.Round(foreground.R * amount + background.R * (1 - amount)),
+            (byte)Math.Round(foreground.G * amount + background.G * (1 - amount)),
+            (byte)Math.Round(foreground.B * amount + background.B * (1 - amount)));
+    }
+
+    private static double RelativeLuminance(Color color)
+    {
+        static double Channel(byte value)
+        {
+            double normalized = value / 255.0;
+            return normalized <= 0.03928
+                ? normalized / 12.92
+                : Math.Pow((normalized + 0.055) / 1.055, 2.4);
+        }
+
+        return 0.2126 * Channel(color.R) + 0.7152 * Channel(color.G) + 0.0722 * Channel(color.B);
     }
 
     private static string FormatAccentColor(Color color) =>
@@ -453,14 +540,6 @@ public partial class MainWindow : Window
             Convert.ToByte(hex.Substring(3, 2), 16),
             Convert.ToByte(hex.Substring(5, 2), 16));
         return true;
-    }
-
-    private void SetNavigationState(bool backupsSelected)
-    {
-        BackupsNav.Background = backupsSelected ? new SolidColorBrush(Color.FromRgb(38, 55, 86)) : Brushes.Transparent;
-        BackupsNav.BorderBrush = backupsSelected ? new SolidColorBrush(Color.FromRgb(49, 75, 115)) : Brushes.Transparent;
-        SettingsNav.Background = backupsSelected ? Brushes.Transparent : new SolidColorBrush(Color.FromRgb(38, 55, 86));
-        SettingsNav.BorderBrush = backupsSelected ? Brushes.Transparent : new SolidColorBrush(Color.FromRgb(49, 75, 115));
     }
 
     private void ShowError(string message, Exception ex)
@@ -508,7 +587,7 @@ public partial class MainWindow : Window
             HideToTray();
     }
 
-    private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    private void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
         if (_allowClose)
         {

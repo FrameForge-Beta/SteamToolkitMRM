@@ -8,10 +8,10 @@ string fakeAppData = Path.Combine(root, "App");
 try
 {
     CreateFixture(Path.Combine(fakeSteam, "userdata"), "user", "userdata.bin", "test-userdata");
+    CreateFixture(Path.Combine(fakeSteam, "userdata"), "user", "hidden.bin", "hidden-file");
     CreateFixture(Path.Combine(fakeSteam, "appcache", "stats"), "", "stats.bin", "test-stats");
     CreateFixture(Path.Combine(fakeSteam, "depotcache"), "", "depot.bin", "test-depotcache");
-    CreateFixture(Path.Combine(fakeSteam, "config", "stplug-in"), "", "12345.lua", "test-lua-tools-manifest");
-    File.SetAttributes(Path.Combine(fakeSteam, "config", "stplug-in", "12345.lua"), FileAttributes.Hidden);
+    File.SetAttributes(Path.Combine(fakeSteam, "userdata", "user", "hidden.bin"), FileAttributes.Hidden);
 
     Directory.CreateDirectory(fakeAppData);
     await File.WriteAllTextAsync(Path.Combine(fakeAppData, "settings.json"),
@@ -30,7 +30,7 @@ try
         "Portuguese should remain the default application language.");
     const string legacyFolder = "BackupSteamMRM-2026-07-16_13-04-11";
     string legacyBackup = Path.Combine(fakeAppData, "backups", legacyFolder);
-    Directory.CreateDirectory(Path.Combine(legacyBackup, "st-plug-in"));
+    Directory.CreateDirectory(Path.Combine(legacyBackup, "userdata"));
     await File.WriteAllTextAsync(Path.Combine(legacyBackup, "meta.json"),
         """{"trigger":"auto","timestamp":"2026-07-16_13-04-11","pinned":true,"custom_name":"Legacy Lua Tools backup"}""");
 
@@ -50,10 +50,8 @@ try
         "Appcache stats content was not copied.");
     Assert(File.ReadAllText(Path.Combine(backupRoot, "depotcache", "depot.bin")) == "test-depotcache",
         "Depotcache content was not copied.");
-    string copiedManifest = Path.Combine(backupRoot, "stplug-in", "12345.lua");
-    Assert(File.ReadAllText(copiedManifest) == "test-lua-tools-manifest",
-        "Lua Tools manifest content was not copied.");
-    Assert((File.GetAttributes(copiedManifest) & FileAttributes.Hidden) != 0,
+    string copiedUserdata = Path.Combine(backupRoot, "userdata", "user", "hidden.bin");
+    Assert((File.GetAttributes(copiedUserdata) & FileAttributes.Hidden) != 0,
         "Hidden file attribute was not preserved.");
 
     using JsonDocument metadata = JsonDocument.Parse(
@@ -91,6 +89,30 @@ try
     await service.CreateBackupAsync("manual");
     Assert((await service.ListBackupsAsync()).Count == 3,
         "A new backup was not created in the selected path.");
+
+    string newestFolder = (await service.ListBackupsAsync())
+        .OrderByDescending(entry => entry.Folder, StringComparer.OrdinalIgnoreCase)
+        .First().Folder;
+    await service.CompressBackupManualAsync(newestFolder, "zip");
+    IReadOnlyList<BackupEntry> afterCompression = await service.ListBackupsAsync();
+    BackupEntry? compressedEntry = afterCompression.FirstOrDefault(entry => entry.Folder == newestFolder);
+    Assert(compressedEntry is not null && compressedEntry.Compressed,
+        "A compressed backup did not appear in the backup list.");
+    Assert(compressedEntry!.IsManuallyCompressed && compressedEntry.IsProtectedFromDeletion,
+        "A manually compressed backup was not protected from deletion.");
+    bool deleteRejected = false;
+    try
+    {
+        await service.DeleteBackupAsync(newestFolder);
+    }
+    catch (InvalidOperationException)
+    {
+        deleteRejected = true;
+    }
+    Assert(deleteRejected, "A manually compressed backup was deleted.");
+    await service.RestoreBackupAsync(newestFolder);
+    Assert(File.Exists(Path.Combine(fakeSteam, "userdata", "user", "userdata.bin")),
+        "Restoring a compressed backup did not restore its contents.");
 
     string invalidNestedPath = Path.Combine(chosenBackupPath, backup.Folder, "nested");
     bool rejectedNestedPath = false;
@@ -137,10 +159,11 @@ try
         "The language selector indices do not map consistently to saved languages.");
     Localization.SetLanguage("pt");
 
-    Console.WriteLine("PASS: copied userdata, appcache stats, depotcache and st-plug-in.");
-    Console.WriteLine("PASS: preserved the hidden manifest attribute and legacy-compatible metadata.");
-    Console.WriteLine("PASS: listed an existing plugin backup and preserved its custom name and pinned state.");
+    Console.WriteLine("PASS: copied userdata, appcache stats and depotcache.");
+    Console.WriteLine("PASS: preserved the hidden file attribute and legacy-compatible metadata.");
+    Console.WriteLine("PASS: listed an existing legacy backup and preserved its custom name and pinned state.");
     Console.WriteLine("PASS: restored backed-up files and preserved unrelated existing files.");
+    Console.WriteLine("PASS: compressed backups are listed, protected and restorable.");
     Console.WriteLine("PASS: purple default, game automation, Windows startup preferences, and custom accent persist.");
     Console.WriteLine("PASS: Portuguese, English, Spanish, and Russian language selection persists and translates.");
     Console.WriteLine("PASS: selected backup folder works with spaces, moves and lists existing backups, and receives new backups.");
